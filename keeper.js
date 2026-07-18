@@ -30,7 +30,7 @@ const MIN_POT_ETH = ethers.parseEther(process.env.MIN_POT_ETH || "0.02");
 const SLIPPAGE_BPS = BigInt(process.env.SLIPPAGE_BPS || "1500"); // minOut = 85% of spot estimate (covers 5% pool fee + impact)
 const PROCESS_GAS = BigInt(process.env.PROCESS_GAS || "900000"); // gas budget for the round-robin auto-claim push
 const RECYCLE_AT = ethers.parseEther(process.env.RECYCLE_AT || "1");   // when the keeper's OWN balance passes this...
-const KEEP_GAS = ethers.parseEther(process.env.KEEP_GAS || "0.02");    // ...it keeps this much for gas (a real ~week runway) and sends the rest (~0.98) back to the treasury (-> next buyAll -> stocks to holders)
+const KEEP_GAS = ethers.parseEther(process.env.KEEP_GAS || "0.1");     // ...it keeps 0.1 for gas (~a month runway) and sends the rest (~0.9) back to the treasury (-> next buyAll -> stocks to holders)
 
 const treasuryAbi = [
   "function buyAll(uint256[] minOuts) returns (uint256,uint256[],uint256[])",
