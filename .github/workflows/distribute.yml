@@ -6,7 +6,7 @@ on:
     - cron: "*/30 * * * *"   # every 30 minutes
   workflow_dispatch: {}        # manual "Run workflow" button
 concurrency:
-  group: keeper-distribute
+  group: keeper-onchain      # shared with burn-bb so they never send txs from the same wallet at once
   cancel-in-progress: false
 jobs:
   run:

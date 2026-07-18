@@ -2,10 +2,10 @@ name: burn-bb
 # Once a day: sweep the 0.663% LP fee and buy+burn BlackBerry ($BB).
 on:
   schedule:
-    - cron: "0 3 * * *"      # daily at 03:00 UTC
+    - cron: "15 3 * * *"     # daily at 03:15 UTC (offset off the :00/:30 distribute slots)
   workflow_dispatch: {}        # manual "Run workflow" button
 concurrency:
-  group: keeper-burn-bb
+  group: keeper-onchain      # shared with distribute so they never send txs from the same wallet at once
   cancel-in-progress: false
 jobs:
   run:
