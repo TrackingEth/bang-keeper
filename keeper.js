@@ -93,7 +93,7 @@ async function main() {
   // passes to cover a full holder-cycle each run (bounded; cheap once everyone is caught up).
   try {
     const holderCount = Number(await distributor.holderCount());
-    const passes = Math.min(Math.ceil(holderCount / 2) + 2, Number(process.env.PUSH_MAX_PASSES || 30));
+    const passes = Math.min(Math.ceil(holderCount / 2) + 2, Number(process.env.PUSH_MAX_PASSES || 80));
     for (let i = 0; i < passes; i++) {
       await (await token.processRewardClaims(PROCESS_GAS)).wait();
     }
