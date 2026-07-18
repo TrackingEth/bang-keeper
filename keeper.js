@@ -40,6 +40,8 @@ const treasuryAbi = [
   "function maxSpendPerCall() view returns (uint256)",
 ];
 const tokenAbi = ["function processRewardClaims(uint256 gasLimit) returns (uint256,uint256,uint256)"];
+const distAbi = ["function holderCount() view returns (uint256)"];
+const DISTRIBUTOR = process.env.DISTRIBUTOR || "0x6edd4DBb53Cb2718e6C669e43ba2F0811f548136";
 const svAbi = ["function getSlot0(bytes32) view returns (uint160 sqrtPriceX96, int24, uint24, uint24)"];
 const coder = ethers.AbiCoder.defaultAbiCoder();
 const poolId = (c1) => ethers.keccak256(coder.encode(["address", "address", "uint24", "int24", "address"], [ethers.ZeroAddress, c1, FEE, TICK_SPACING, HOOKS]));
@@ -50,6 +52,7 @@ async function main() {
   const w = new ethers.Wallet(KEEPER_PK, p);
   const treasury = new ethers.Contract(TREASURY, treasuryAbi, w);
   const token = new ethers.Contract(TOKEN, tokenAbi, w);
+  const distributor = new ethers.Contract(DISTRIBUTOR, distAbi, p);
   const sv = new ethers.Contract(STATEVIEW, svAbi, p);
 
   const pot = await p.getBalance(TREASURY);
@@ -86,11 +89,15 @@ async function main() {
     console.log(`buyAll not due (pot<${ethers.formatEther(MIN_POT_ETH)} or cooldown active) — accumulating`);
   }
 
-  // push accrued rewards to holders (permissionless, gas-bounded round-robin)
+  // push accrued rewards to ALL holders. The round-robin does ~2 holders per call, so loop enough
+  // passes to cover a full holder-cycle each run (bounded; cheap once everyone is caught up).
   try {
-    const tx = await token.processRewardClaims(PROCESS_GAS);
-    await tx.wait();
-    console.log(`processRewardClaims ok: ${tx.hash}`);
+    const holderCount = Number(await distributor.holderCount());
+    const passes = Math.min(Math.ceil(holderCount / 2) + 2, Number(process.env.PUSH_MAX_PASSES || 30));
+    for (let i = 0; i < passes; i++) {
+      await (await token.processRewardClaims(PROCESS_GAS)).wait();
+    }
+    console.log(`processRewardClaims: ${passes} passes covering ${holderCount} holders`);
   } catch (e) { console.log("processRewardClaims:", e.shortMessage || e.message); }
 
   // recycle: the keeper does NOT hoard its 1% rewards. Once its own balance passes RECYCLE_AT (1 ETH),
