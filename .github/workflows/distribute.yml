@@ -1,0 +1,24 @@
+name: distribute
+# Buys the 8 stocks with the accumulated 4% treasury pot and pushes rewards to holders.
+# buyAll is permissionless + pays the caller 1%, so it is self-funding once volume is there.
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch: {}        # manual "Run workflow" button
+concurrency:
+  group: keeper-distribute
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: node keeper.js
+        env:
+          KEEPER_PK: ${{ secrets.KEEPER_PK }}
+          MIN_POT_ETH: "0.002"

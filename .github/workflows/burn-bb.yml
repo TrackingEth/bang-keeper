@@ -1,0 +1,22 @@
+name: burn-bb
+# Once a day: sweep the 0.663% LP fee and buy+burn BlackBerry ($BB).
+on:
+  schedule:
+    - cron: "0 3 * * *"      # daily at 03:00 UTC
+  workflow_dispatch: {}        # manual "Run workflow" button
+concurrency:
+  group: keeper-burn-bb
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: node burn-bb.js
+        env:
+          KEEPER_PK: ${{ secrets.KEEPER_PK }}

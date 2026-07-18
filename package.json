@@ -1,0 +1,13 @@
+{
+  "name": "bang-keeper",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Permissionless, self-funding keeper for $BANG — drives buyAll + processRewardClaims on a schedule.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node keeper.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  }
+}
