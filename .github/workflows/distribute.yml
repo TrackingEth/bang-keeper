@@ -3,7 +3,7 @@ name: distribute
 # buyAll is permissionless + pays the caller 1%, so it is self-funding once volume is there.
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "0 * * * *"      # every hour, on the hour — buys the stocks and pushes them to eligible holders
   workflow_dispatch: {}        # manual "Run workflow" button
 concurrency:
   group: keeper-onchain      # shared with burn-bb so they never send txs from the same wallet at once
