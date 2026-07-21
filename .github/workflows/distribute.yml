@@ -3,7 +3,7 @@ name: distribute
 # buyAll is permissionless + pays the caller 1%, so it is self-funding once volume is there.
 on:
   schedule:
-    - cron: "0 * * * *"      # every hour, on the hour — buys the stocks and pushes them to eligible holders
+    - cron: "7 * * * *"      # hourly at :07 — :00 slots are the most congested on github and get skipped/delayed
   workflow_dispatch: {}        # manual "Run workflow" button
 concurrency:
   group: keeper-onchain      # shared with burn-bb so they never send txs from the same wallet at once
@@ -11,14 +11,14 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - run: npm install
-      - run: node keeper.js
+      - run: node keeper-loop.js
         env:
           KEEPER_PK: ${{ secrets.KEEPER_PK }}
           MIN_POT_ETH: "0.002"
