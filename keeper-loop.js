@@ -37,7 +37,13 @@ const STOCKS = [
 ];
 const FEE = 50000, TICK_SPACING = 1000, HOOKS = ethers.ZeroAddress;
 
+// MIN_POT_ETH is the TRIGGER: below it the run does nothing at all (no buys, no push),
+// so the fixed gas cost of a distribution is only paid once the pot is worth distributing.
+// DRAIN_TO_ETH is the FLOOR: once a run has triggered, it drains the pot down to here
+// instead of stopping at the trigger, which would park a residue in the treasury forever.
 const MIN_POT_ETH = ethers.parseEther(process.env.MIN_POT_ETH || "0.02");
+const DRAIN_TO_ETH_RAW = ethers.parseEther(process.env.DRAIN_TO_ETH || "0.002");
+const DRAIN_TO_ETH = DRAIN_TO_ETH_RAW < MIN_POT_ETH ? DRAIN_TO_ETH_RAW : MIN_POT_ETH;
 const SLIPPAGE_BPS = BigInt(process.env.SLIPPAGE_BPS || "1500"); // minOut = 85% of spot estimate
 const PROCESS_GAS = BigInt(process.env.PROCESS_GAS || "900000"); // gas budget per round-robin push call
 const RECYCLE_AT = ethers.parseEther(process.env.RECYCLE_AT || "1");
@@ -58,7 +64,10 @@ const treasuryAbi = [
   "function maxSpendPerCall() view returns (uint256)",
 ];
 const tokenAbi = ["function processRewardClaims(uint256 gasLimit) returns (uint256,uint256,uint256)"];
-const distAbi = ["function holderCount() view returns (uint256)"];
+const distAbi = [
+  "function holderCount() view returns (uint256)",
+  "event Processed(uint256 iterations, uint256 claims, uint256 lastProcessedIndex, uint256 gasLimit, address indexed executor)",
+];
 const svAbi = ["function getSlot0(bytes32) view returns (uint160 sqrtPriceX96, int24, uint24, uint24)"];
 const coder = ethers.AbiCoder.defaultAbiCoder();
 const poolId = (c1) => ethers.keccak256(coder.encode(["address", "address", "uint24", "int24", "address"], [ethers.ZeroAddress, c1, FEE, TICK_SPACING, HOOKS]));
@@ -104,7 +113,14 @@ async function main() {
     if (elapsed() > MAX_RUN_SECONDS) { console.log("run time budget hit — stopping buy loop, moving to push"); break; }
     const pot = await p.getBalance(TREASURY);
     console.log(`[buy ${buys}] pot=${ethers.formatEther(pot)} ETH`);
-    if (pot < MIN_POT_ETH) { console.log("pot below MIN_POT_ETH — fully drained, stopping loop"); break; }
+    // first pass must clear the trigger; after that we drain to the lower floor
+    const floor = buys === 0 ? MIN_POT_ETH : DRAIN_TO_ETH;
+    if (pot < floor) {
+      console.log(buys === 0
+        ? `pot below MIN_POT_ETH (${ethers.formatEther(MIN_POT_ETH)}) — not worth a distribution yet, idling`
+        : `pot below DRAIN_TO_ETH (${ethers.formatEther(DRAIN_TO_ETH)}) — fully drained, stopping loop`);
+      break;
+    }
     if (n !== STOCKS.length) { console.log(`assetCount=${n} != 8 — abort`); break; }
 
     // respect the on-chain cooldown (buyAll reverts CooldownActive otherwise)
@@ -139,17 +155,38 @@ async function main() {
   }
   console.log(`buy loop done: ${buys} buyAll(s) in ${Math.round(elapsed())}s`);
 
-  // ---- PUSH ONCE: cover all holders after the buys are done ----
-  try {
-    const holderCount = Number(await distributor.holderCount());
-    const passes = Math.min(Math.ceil(holderCount / 2) + 2, Number(process.env.PUSH_MAX_PASSES || 80));
-    if (DRY_RUN) {
-      console.log(`[dry] would run ${passes} processRewardClaims passes covering ${holderCount} holders`);
-    } else {
-      for (let i = 0; i < passes; i++) await (await token.processRewardClaims(PROCESS_GAS)).wait();
-      console.log(`processRewardClaims: ${passes} passes covering ${holderCount} holders`);
-    }
-  } catch (e) { console.log("processRewardClaims:", e.shortMessage || e.message); }
+  // ---- PUSH ONCE: cover every holder exactly one lap of the ring, then stop ----
+  // distributor.process() already caps itself at `iterations < numberOfHolders`, so one
+  // lap is all it takes to offer every holder a payment. The old fixed pass count kept
+  // calling past that: measured on mainnet, the tail passes iterated 19 holders each for
+  // ZERO claims at ~900k gas apiece, and that waste was 97% of the keeper's whole gas bill.
+  // Summing the Processed event's `iterations` tells us exactly when the lap closes.
+  if (buys === 0) {
+    console.log("no buys this run — nothing new to distribute, skipping push");
+  } else {
+    try {
+      const holderCount = Number(await distributor.holderCount());
+      const cap = Number(process.env.PUSH_MAX_PASSES || 80);
+      if (DRY_RUN) {
+        console.log(`[dry] would push until one lap of ${holderCount} holders is covered (cap ${cap} passes)`);
+      } else {
+        let covered = 0, claims = 0, passes = 0;
+        while (covered < holderCount && passes < cap) {
+          const rc = await (await token.processRewardClaims(PROCESS_GAS)).wait();
+          passes++;
+          const ev = rc.logs
+            .map((l) => { try { return distributor.interface.parseLog(l); } catch (_) { return null; } })
+            .find((e) => e && e.name === "Processed");
+          if (!ev) { console.log("push: no Processed event in receipt — stopping"); break; }
+          const it = Number(ev.args.iterations);
+          covered += it;
+          claims += Number(ev.args.claims);
+          if (it === 0) break; // empty ring — nothing left to walk
+        }
+        console.log(`processRewardClaims: ${passes} passes, ${covered}/${holderCount} holders covered, ${claims} paid`);
+      }
+    } catch (e) { console.log("processRewardClaims:", e.shortMessage || e.message); }
+  }
 
   // ---- RECYCLE: keeper never hoards its 1% (unchanged from keeper.js) ----
   if (!DRY_RUN && w) {

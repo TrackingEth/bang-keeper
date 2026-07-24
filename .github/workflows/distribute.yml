@@ -22,4 +22,8 @@ jobs:
         env:
           KEEPER_PK: ${{ secrets.KEEPER_PK }}
           RPC: ${{ secrets.RPC }}
-          MIN_POT_ETH: "0.002"
+          # trigger: only distribute once the pot is worth the fixed gas of a distribution.
+          # at the measured ~0.0042 ETH/h fee rate this fires roughly once a day.
+          MIN_POT_ETH: "0.1"
+          # once triggered, drain the pot properly instead of stopping at the trigger
+          DRAIN_TO_ETH: "0.002"
