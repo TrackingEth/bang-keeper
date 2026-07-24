@@ -21,4 +21,5 @@ jobs:
       - run: node keeper-loop.js
         env:
           KEEPER_PK: ${{ secrets.KEEPER_PK }}
+          RPC: ${{ secrets.RPC }}
           MIN_POT_ETH: "0.002"
