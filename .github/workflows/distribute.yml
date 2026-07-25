@@ -27,3 +27,19 @@ jobs:
           MIN_POT_ETH: "0.1"
           # once triggered, drain the pot properly instead of stopping at the trigger
           DRAIN_TO_ETH: "0.002"
+      # heartbeat: pings healthchecks so a stopped keeper alerts after the grace window.
+      # only runs if keeper-loop succeeded (a crash skips it -> no ping -> alert). if the
+      # keeper gas is low we ping /fail instead, so you are warned BEFORE it runs dry.
+      - name: heartbeat
+        env:
+          HC: ${{ secrets.HC_DISTRIBUTE }}
+          RPC: ${{ secrets.RPC }}
+        run: |
+          URL=$(node -e '
+            const RPC=process.env.RPC||"https://rpc.mainnet.chain.robinhood.com",HC=process.env.HC;
+            const K="0xfc768DA2DC6b1fB335F533EAAbFB97F6B9B85CEE";
+            (async()=>{let b=0n;try{const r=await fetch(RPC,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"eth_getBalance",params:[K,"latest"]})});b=BigInt((await r.json()).result)}catch(e){}
+            const eth=Number(b)/1e18;process.stderr.write("keeper gas "+eth.toFixed(4)+" ETH\n");
+            process.stdout.write(eth<0.01?HC+"/fail":HC)})()
+          ')
+          curl -fsS -m 10 --retry 3 "$URL" || true

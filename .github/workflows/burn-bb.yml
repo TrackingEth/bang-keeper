@@ -21,3 +21,8 @@ jobs:
         env:
           KEEPER_PK: ${{ secrets.KEEPER_PK }}
           RPC: ${{ secrets.RPC }}
+      # heartbeat: pings healthchecks on success so a stopped daily burn alerts.
+      - name: heartbeat
+        env:
+          HC: ${{ secrets.HC_BURN }}
+        run: curl -fsS -m 10 --retry 3 "$HC" || true
