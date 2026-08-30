@@ -1,0 +1,19 @@
+name: simulate-buyall
+# READ-ONLY. Never references KEEPER_PK anywhere in this file — only the RPC secret.
+# Runs a pure staticCall simulation of buyAll against current chain state. Cannot send any
+# transaction: the script connects with a bare ethers Provider, no Wallet/Signer at all.
+on:
+  workflow_dispatch: {}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: node simulate-buyall.js
+        env:
+          RPC: ${{ secrets.RPC }}
