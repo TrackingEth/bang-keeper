@@ -1,0 +1,22 @@
+name: sweep-to-owner
+# ONE-OFF: final wind-down step. Sweeps the keeper's entire remaining ETH balance to Pedro's
+# personal wallet. Manual trigger only — never scheduled, never part of the recurring keeper.
+on:
+  workflow_dispatch: {}
+concurrency:
+  group: keeper-onchain      # shared with distribute/burn-bb so they never send txs from the same wallet at once
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: node sweep-to-owner.js
+        env:
+          KEEPER_PK: ${{ secrets.KEEPER_PK }}
+          RPC: ${{ secrets.RPC }}
