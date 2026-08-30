@@ -14,6 +14,10 @@ on:
         description: "Override DRAIN_TO_ETH for this manual run only (scheduled runs always use 0.002)"
         required: false
         default: "0.002"
+      dry_run:
+        description: "true = simulate via staticCall and send nothing (scheduled runs never set this)"
+        required: false
+        default: "false"
 concurrency:
   group: keeper-onchain      # shared with burn-bb so they never send txs from the same wallet at once
   cancel-in-progress: false
@@ -36,10 +40,13 @@ jobs:
           MIN_POT_ETH: ${{ github.event.inputs.min_pot_eth || '0.1' }}
           # once triggered, drain the pot properly instead of stopping at the trigger
           DRAIN_TO_ETH: ${{ github.event.inputs.drain_to_eth || '0.002' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
       # heartbeat: pings healthchecks so a stopped keeper alerts after the grace window.
       # only runs if keeper-loop succeeded (a crash skips it -> no ping -> alert). if the
       # keeper gas is low we ping /fail instead, so you are warned BEFORE it runs dry.
+      # skipped entirely on a dry run — it sent no tx, so it shouldn't count as a live heartbeat.
       - name: heartbeat
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
           HC: ${{ secrets.HC_DISTRIBUTE }}
           RPC: ${{ secrets.RPC }}
